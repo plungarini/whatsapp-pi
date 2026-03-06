@@ -7,8 +7,8 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 import dotenv from 'dotenv';
 import path from 'node:path';
+import { setupReceiver } from '../services/receiver.service.js';
 import { globalLogger } from './logger.js';
-import { setupReceiver } from './receiver.js';
 
 dotenv.config();
 
@@ -21,15 +21,14 @@ let latestQr: string | null = null;
 async function connectToWhatsApp() {
 	const { state, saveCreds } = await useMultiFileAuthState(path.resolve(process.cwd(), authDataDir));
 
-	// Import fetchLatestBaileysVersion dynamically since it's not exported at the top level in types by default, or just require it
 	const { fetchLatestBaileysVersion, Browsers } = await import('@whiskeysockets/baileys');
 	const { version } = await fetchLatestBaileysVersion();
 
 	socket = makeWASocket({
 		version,
 		auth: state,
-		printQRInTerminal: false, // We will serve the QR via HTTP
-		logger: globalLogger as any, // Best effort hook
+		printQRInTerminal: false,
+		logger: globalLogger as any,
 		browser: Browsers.macOS('Desktop'),
 		syncFullHistory: false,
 	});
@@ -49,11 +48,11 @@ async function connectToWhatsApp() {
 			globalLogger.error('Connection closed due to', lastDisconnect?.error, ', reconnecting:', shouldReconnect);
 
 			if (shouldReconnect) {
-				setTimeout(() => connectToWhatsApp(), 5000); // 5 sec backoff
+				setTimeout(() => connectToWhatsApp(), 5000);
 			}
 		} else if (connection === 'open') {
 			globalLogger.info('WhatsApp connection opened successfully');
-			latestQr = null; // Clear QR since we are connected
+			latestQr = null;
 		}
 	});
 
