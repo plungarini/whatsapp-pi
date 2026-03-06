@@ -2,12 +2,12 @@
 	"name": "whatsapp-pi",
 	"version": "1.0.0",
 	"description": "WhatsApp microservice",
-	"main": "dist/server.js",
+	"main": "dist/index.js",
 	"type": "module",
 	"scripts": {
 		"build": "tsc",
-		"dev:server": "ts-node-dev --respawn --transpile-only src/server.ts",
-		"start": "node dist/server.js",
+		"dev:server": "ts-node-dev --respawn --transpile-only src/index.ts",
+		"start": "node dist/index.js",
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run",
 		"onboard": "node scripts/onboard.js"
