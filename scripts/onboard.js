@@ -73,15 +73,23 @@ async function main() {
 
 	const socket = makeWASocket({
 		auth: state,
-		printQRInTerminal: true,
+		// printQRInTerminal is deprecated, handled manually below
+		printQRInTerminal: false,
 		logger: logger,
 	});
 
 	socket.ev.on('creds.update', saveCreds);
 
+	// Load qrcode-terminal
+	const { default: qrcode } = await import('qrcode-terminal');
+
 	await new Promise((resolve) => {
 		socket.ev.on('connection.update', (update) => {
-			const { connection, lastDisconnect } = update;
+			const { connection, lastDisconnect, qr } = update;
+
+			if (qr) {
+				qrcode.generate(qr, { small: true });
+			}
 
 			if (connection === 'open') {
 				console.log('\n✅ Successfully authenticated with WhatsApp!');
