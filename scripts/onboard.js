@@ -56,8 +56,51 @@ async function main() {
 
 	fs.writeFileSync(envPath, envOutput);
 	console.log('\n✅ Successfully saved configuration to .env\n');
-}
 
+	console.log('--- WhatsApp Authentication ---');
+	console.log('Initializing WhatsApp client. Please wait for the QR code...\n');
+
+	// Dynamically import baileys and pino to avoid loading them if the script fails early
+	const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = await import('@whiskeysockets/baileys');
+	const { default: pino } = await import('pino');
+
+	const authDir = newEnv['WA_AUTH_DATA_DIR'] || './data/wa-auth';
+	const resolvedAuthDir = path.resolve(process.cwd(), authDir);
+	const { state, saveCreds } = await useMultiFileAuthState(resolvedAuthDir);
+
+	// Suppress baileys logs so it doesn't flood the terminal
+	const logger = pino({ level: 'silent' });
+
+	const socket = makeWASocket({
+		auth: state,
+		printQRInTerminal: true,
+		logger: logger,
+	});
+
+	socket.ev.on('creds.update', saveCreds);
+
+	await new Promise((resolve) => {
+		socket.ev.on('connection.update', (update) => {
+			const { connection, lastDisconnect } = update;
+
+			if (connection === 'open') {
+				console.log('\n✅ Successfully authenticated with WhatsApp!');
+				socket.end(undefined);
+				resolve();
+			} else if (connection === 'close') {
+				const statusCode = lastDisconnect?.error?.output?.statusCode;
+				if (statusCode === DisconnectReason.loggedOut) {
+					console.log('\n❌ Logged out of WhatsApp. You can try running onboard again.');
+					socket.end(undefined);
+					resolve();
+				}
+				// If it's a different code, baileys will automatically try to reconnect, so we just wait.
+			}
+		});
+	});
+
+	console.log('\n🚀 Onboarding completely finished! You can now start the server.');
+}
 // Handle sigint
 let isExiting = false;
 process.on('SIGINT', () => {
