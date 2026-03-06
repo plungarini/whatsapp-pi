@@ -136,7 +136,16 @@ async function main() {
 			});
 		});
 
-		console.log('\n🚀 Onboarding completely finished! You can now start the server.');
+		console.log('\n🚀 Onboarding completely finished! Running tests...');
+
+		const { execSync } = await import('node:child_process');
+		try {
+			execSync('npm test', { stdio: 'inherit' });
+			console.log('\n✅ All tests passed! You can now start the server.');
+		} catch (error_) {
+			console.error('\n❌ Tests failed. Please check the output above.', error_);
+			process.exit(1);
+		}
 	} catch (err) {
 		console.error('An error occurred during WhatsApp setup:', err);
 		process.exit(1);
@@ -152,7 +161,9 @@ process.on('SIGINT', () => {
 	}
 });
 
-main().catch((err) => {
+try {
+	await main();
+} catch (err) {
 	console.error(err);
 	process.exit(1);
-});
+}

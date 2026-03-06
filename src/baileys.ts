@@ -6,7 +6,7 @@ import makeWASocket, {
 	WASocket,
 } from '@whiskeysockets/baileys';
 import dotenv from 'dotenv';
-import path from 'path';
+import path from 'node:path';
 import { globalLogger } from './logger.js';
 import { setupReceiver } from './receiver.js';
 
