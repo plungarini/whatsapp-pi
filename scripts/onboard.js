@@ -60,54 +60,87 @@ async function main() {
 	console.log('--- WhatsApp Authentication ---');
 	console.log('Initializing WhatsApp client. Please wait for the QR code...\n');
 
-	// Dynamically import baileys and pino to avoid loading them if the script fails early
-	const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = await import('@whiskeysockets/baileys');
-	const { default: pino } = await import('pino');
+	try {
+		// Dynamically import dependencies first to avoid listener race conditions
+		const {
+			default: makeWASocket,
+			useMultiFileAuthState,
+			DisconnectReason,
+			Browsers,
+			fetchLatestBaileysVersion,
+		} = await import('@whiskeysockets/baileys');
+		const { default: pino } = await import('pino');
+		const { default: qrcode } = await import('qrcode-terminal');
 
-	const authDir = newEnv['WA_AUTH_DATA_DIR'] || './data/wa-auth';
-	const resolvedAuthDir = path.resolve(process.cwd(), authDir);
-	const { state, saveCreds } = await useMultiFileAuthState(resolvedAuthDir);
+		console.log('Imported dependencies');
 
-	// Suppress baileys logs so it doesn't flood the terminal
-	const logger = pino({ level: 'silent' });
+		const authDir = newEnv['WA_AUTH_DATA_DIR'] || './data/wa-auth';
+		const resolvedAuthDir = path.resolve(process.cwd(), authDir);
 
-	const socket = makeWASocket({
-		auth: state,
-		// printQRInTerminal is deprecated, handled manually below
-		printQRInTerminal: false,
-		logger: logger,
-	});
+		const { state, saveCreds } = await useMultiFileAuthState(resolvedAuthDir);
+		const { version, isLatest } = await fetchLatestBaileysVersion();
+		console.log(`Using WA v${version.join('.')} (isLatest: ${isLatest})`);
 
-	socket.ev.on('creds.update', saveCreds);
+		// Suppress baileys logs so it doesn't flood the terminal
+		const logger = pino({ level: 'silent' });
 
-	// Load qrcode-terminal
-	const { default: qrcode } = await import('qrcode-terminal');
+		const socket = makeWASocket({
+			version,
+			auth: state,
+			printQRInTerminal: false,
+			logger: logger,
+			browser: Browsers.macOS('Desktop'),
+			syncFullHistory: false,
+		});
 
-	await new Promise((resolve) => {
-		socket.ev.on('connection.update', (update) => {
-			const { connection, lastDisconnect, qr } = update;
+		console.log('Started Baileys socket');
 
-			if (qr) {
-				qrcode.generate(qr, { small: true });
-			}
+		socket.ev.on('creds.update', saveCreds);
 
-			if (connection === 'open') {
-				console.log('\n✅ Successfully authenticated with WhatsApp!');
-				socket.end(undefined);
-				resolve();
-			} else if (connection === 'close') {
-				const statusCode = lastDisconnect?.error?.output?.statusCode;
-				if (statusCode === DisconnectReason.loggedOut) {
-					console.log('\n❌ Logged out of WhatsApp. You can try running onboard again.');
+		await new Promise((resolve) => {
+			socket.ev.on('connection.update', (update) => {
+				const { connection, lastDisconnect, qr } = update;
+
+				if (qr) {
+					console.log('\nReceived QR code! Please scan it with your WhatsApp app:');
+					qrcode.generate(qr, { small: true });
+				}
+
+				if (connection === 'open') {
+					console.log('\n✅ Successfully authenticated with WhatsApp!');
 					socket.end(undefined);
 					resolve();
-				}
-				// If it's a different code, baileys will automatically try to reconnect, so we just wait.
-			}
-		});
-	});
+				} else if (connection === 'close') {
+					const error = lastDisconnect?.error;
+					const statusCode = error?.output?.statusCode;
 
-	console.log('\n🚀 Onboarding completely finished! You can now start the server.');
+					if (statusCode !== DisconnectReason.loggedOut && statusCode !== 405) {
+						console.log('Connection closed:', error?.message, '(Status code:', statusCode, ')');
+					}
+
+					if (statusCode === DisconnectReason.loggedOut) {
+						console.log('\n❌ Logged out of WhatsApp. You can try running onboard again.');
+						// Clear the auth folder so the next run starts fresh
+						fs.rmSync(resolvedAuthDir, { recursive: true, force: true });
+						socket.end(undefined);
+						resolve();
+					} else if (statusCode === 405) {
+						console.log(
+							'\n❌ WhatsApp rejected the connection (405). This usually means the server blocked the request, but try running onboard again.',
+						);
+						socket.end(undefined);
+						resolve();
+					}
+					// If it's a different code, baileys will automatically try to reconnect, so we just wait.
+				}
+			});
+		});
+
+		console.log('\n🚀 Onboarding completely finished! You can now start the server.');
+	} catch (err) {
+		console.error('An error occurred during WhatsApp setup:', err);
+		process.exit(1);
+	}
 }
 // Handle sigint
 let isExiting = false;

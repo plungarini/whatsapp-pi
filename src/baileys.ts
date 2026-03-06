@@ -21,10 +21,17 @@ let latestQr: string | null = null;
 async function connectToWhatsApp() {
 	const { state, saveCreds } = await useMultiFileAuthState(path.resolve(process.cwd(), authDataDir));
 
+	// Import fetchLatestBaileysVersion dynamically since it's not exported at the top level in types by default, or just require it
+	const { fetchLatestBaileysVersion, Browsers } = await import('@whiskeysockets/baileys');
+	const { version } = await fetchLatestBaileysVersion();
+
 	socket = makeWASocket({
+		version,
 		auth: state,
 		printQRInTerminal: false, // We will serve the QR via HTTP
 		logger: globalLogger as any, // Best effort hook
+		browser: Browsers.macOS('Desktop'),
+		syncFullHistory: false,
 	});
 
 	setupReceiver(socket);
