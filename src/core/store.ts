@@ -45,6 +45,8 @@ db.exec(`
 // Vector table for semantic search (using sqlite-vec if available)
 try {
 	// Attempting to load vector extension dynamically if installed
+	const { createRequire } = await import('node:module');
+	const require = createRequire(import.meta.url);
 	const sqliteVec = require('sqlite-vec');
 	sqliteVec.load(db);
 
