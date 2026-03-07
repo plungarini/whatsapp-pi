@@ -54,6 +54,6 @@ try {
             embedding FLOAT[384]
         );
     `);
-} catch (e) {
-	console.warn('Vector extension (sqlite-vec) not loaded. Semantic search will be unavailable.', e);
+} catch (e: any) {
+	console.warn(`Vector extension (sqlite-vec) not loaded. Semantic search will be unavailable. (${e.message})`);
 }

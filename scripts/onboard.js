@@ -22,7 +22,7 @@ async function main() {
 		content.split('\n').forEach((line) => {
 			const match = line.match(/^([^=]+)=(.*)$/);
 			if (match) {
-				existingEnv[match[1]] = match[2];
+				existingEnv[match[1]] = match[2].trim();
 			}
 		});
 	}
@@ -40,8 +40,8 @@ async function main() {
 	for (const line of lines) {
 		const match = line.match(/^([^=]+)=(.*)$/);
 		if (match) {
-			const key = match[1];
-			const defaultValue = existingEnv[key] || match[2];
+			const key = match[1].trim();
+			const defaultValue = existingEnv[key] || match[2].trim();
 			const answer = await question(`Enter value for ${key} [${defaultValue}]: `);
 			newEnv[key] = answer.trim() || defaultValue;
 		}
@@ -107,6 +107,7 @@ async function main() {
 
 					if (connection === 'open') {
 						console.log('\n✅ Successfully authenticated with WhatsApp!');
+						socket.ev.removeAllListeners('connection.update');
 						socket.end(undefined);
 						resolve({ success: true });
 					} else if (connection === 'close') {
@@ -116,18 +117,21 @@ async function main() {
 						if (statusCode === DisconnectReason.loggedOut) {
 							console.log('\n❌ Logged out of WhatsApp. You can try running onboard again.');
 							fs.rmSync(resolvedAuthDir, { recursive: true, force: true });
+							socket.ev.removeAllListeners('connection.update');
 							socket.end(undefined);
 							resolve({ success: false });
 						} else if (statusCode === 405) {
 							console.log(
 								'\n❌ WhatsApp rejected the connection (405). This usually means the server blocked the request, but try running onboard again.',
 							);
+							socket.ev.removeAllListeners('connection.update');
 							socket.end(undefined);
 							resolve({ success: false });
 						} else {
 							console.log(
 								`Connection closed: ${error?.message || 'Unknown'} (Status code: ${statusCode || 'None'}). Reconnecting...`,
 							);
+							socket.ev.removeAllListeners('connection.update');
 							socket.end(undefined);
 							resolve({ reconnect: true });
 						}
@@ -144,7 +148,8 @@ async function main() {
 			} else if (result.reconnect) {
 				await new Promise((r) => setTimeout(r, 2000));
 			} else {
-				break;
+				console.log('\n❌ Onboarding failed. Please try again.');
+				process.exit(1);
 			}
 		}
 
