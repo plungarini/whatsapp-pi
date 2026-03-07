@@ -44,9 +44,9 @@ db.exec(`
 
 // Vector table for semantic search (using sqlite-vec if available)
 try {
-	// Attempting to load vector extension
-	// In production, you'd specify the absolute path to the .so/.dll
-	// db.loadExtension('path/to/vec0');
+	// Attempting to load vector extension dynamically if installed
+	const sqliteVec = require('sqlite-vec');
+	sqliteVec.load(db);
 
 	db.exec(`
         CREATE VIRTUAL TABLE IF NOT EXISTS wa_messages_vec USING vec0(

@@ -107,9 +107,44 @@ async function main() {
 
 					if (connection === 'open') {
 						console.log('\n✅ Successfully authenticated with WhatsApp!');
-						socket.ev.removeAllListeners('connection.update');
-						socket.end(undefined);
-						resolve({ success: true });
+
+						if (qr) {
+							console.log('⏳ Please keep this window open while WhatsApp synchronizes your chats to this device...');
+							console.log('   (Your phone might say "Keep app open on both devices")\n');
+
+							// Suppress annoying internal signal logs during the sync process
+							const origConsoleWarn = console.warn;
+							const origConsoleLog = console.log;
+							console.warn = (...args) => {
+								if (typeof args[0] === 'string' && args[0].includes('Closing open session')) return;
+								origConsoleWarn(...args);
+							};
+							console.log = (...args) => {
+								if (typeof args[0] === 'string' && args[0].includes('Closing session')) return;
+								origConsoleLog(...args);
+							};
+
+							const rlWait = readline.createInterface({
+								input: process.stdin,
+								output: process.stdout,
+							});
+
+							rlWait.question('💬 Press ENTER when your phone tells you the setup is complete...', () => {
+								rlWait.close();
+								console.warn = origConsoleWarn;
+								console.log = origConsoleLog;
+								socket.ev.removeAllListeners('connection.update');
+								socket.end(undefined);
+								resolve({ success: true });
+							});
+						} else {
+							// Already synced previously, just close gracefully
+							setTimeout(() => {
+								socket.ev.removeAllListeners('connection.update');
+								socket.end(undefined);
+								resolve({ success: true });
+							}, 2000);
+						}
 					} else if (connection === 'close') {
 						const error = lastDisconnect?.error;
 						const statusCode = error?.output?.statusCode;
@@ -154,6 +189,36 @@ async function main() {
 		}
 
 		console.log('\n🚀 Onboarding completely finished! Running tests...');
+
+		let vecInstalled = false;
+		try {
+			await import('sqlite-vec');
+			vecInstalled = true;
+		} catch (e) {
+			// Not installed
+		}
+
+		if (!vecInstalled) {
+			const rl2 = readline.createInterface({
+				input: process.stdin,
+				output: process.stdout,
+			});
+			const question2 = (query) => new Promise((resolve) => rl2.question(query, resolve));
+			const installVec = await question2('\nDo you want to install sqlite-vec for AI semantic search? (y/N): ');
+			rl2.close();
+
+			const { execSync } = await import('node:child_process');
+
+			if (installVec.toLowerCase().trim() === 'y') {
+				console.log('\nInstalling sqlite-vec...');
+				try {
+					execSync('npm run setup:vec', { stdio: 'inherit' });
+					console.log('✅ Successfully installed sqlite-vec!');
+				} catch (e) {
+					console.error('Failed to install sqlite-vec:', e);
+				}
+			}
+		}
 
 		const { execSync } = await import('node:child_process');
 		try {
