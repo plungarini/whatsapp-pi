@@ -67,7 +67,7 @@ async function routeToSession(session: any, msg: any, senderJid: string, text: s
 			});
 		}
 	} catch (e) {
-		globalLogger.warn(`Failed to insert incoming msg ${msg.key.id}:`, e);
+		globalLogger.warn(`Failed to insert incoming msg ${msg.key.id}: ${e}`);
 	}
 }
 
