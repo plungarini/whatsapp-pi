@@ -1,6 +1,6 @@
 {
   "name": "whatsapp-pi",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "WhatsApp microservice",
   "main": "dist/index.js",
   "type": "module",
