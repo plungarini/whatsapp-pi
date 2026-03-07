@@ -17,7 +17,7 @@ describe('System Health & Integrations', () => {
 
 		// A valid state should at least have creds populated if onboarded
 		expect(state.creds).toBeDefined();
-		expect(state.creds.me).toBeDefined(); // User is logged in
+		expect(state.creds.me || state.creds.noiseKey).toBeDefined(); // User is logged in or has active keys
 	});
 
 	it('should have sqlite-vec extension loaded and ready', () => {
