@@ -10,7 +10,8 @@
 		"start": "node dist/index.js",
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run",
-		"onboard": "node scripts/onboard.js"
+		"onboard": "node scripts/onboard.js",
+		"setup:vec": "npm install sqlite-vec"
 	},
 	"dependencies": {
 		"@fastify/cors": "^11.2.0",
