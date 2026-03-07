@@ -1,68 +1,47 @@
-/**
- * WhatsApp-Pi centralized logging
- * Buffers logs and sends them to the logger-pi service periodically
- */
+import pino from 'pino';
 
 const LOGGER_URL = process.env.LOGGER_URL || 'http://127.0.0.1:4000/logs';
 const PROJECT_ID = 'whatsapp-pi';
 const BATCH_SIZE = 10;
 const FLUSH_INTERVAL = 5000;
 
-class RemoteLogger {
+class RemoteStream {
 	private buffer: any[] = [];
-	private timer: NodeJS.Timeout | null = null;
-	private readonly originalLog = console.log;
-	private readonly originalError = console.error;
-	private readonly originalWarn = console.warn;
-	private readonly originalDebug = console.debug;
+	private readonly timer: NodeJS.Timeout;
 
 	constructor() {
-		this.setupInterception();
-		this.startFlushTimer();
+		this.timer = setInterval(() => this.flush(), FLUSH_INTERVAL);
 	}
 
-	private setupInterception() {
-		console.log = (...args: any[]) => {
-			this.push('info', args.map(String).join(' '));
-			this.originalLog.apply(console, args);
-		};
+	write(msg: string) {
+		try {
+			const data = JSON.parse(msg);
+			this.buffer.push({
+				projectId: PROJECT_ID,
+				level: this.mapLevel(data.level),
+				message: data.msg,
+				timestamp: new Date(data.time).toISOString(),
+				...data,
+			});
 
-		console.error = (...args: any[]) => {
-			this.push('error', args.map(String).join(' '));
-			this.originalError.apply(console, args);
-		};
-
-		console.warn = (...args: any[]) => {
-			this.push('warn', args.map(String).join(' '));
-			this.originalWarn.apply(console, args);
-		};
-
-		console.debug = (...args: any[]) => {
-			this.push('debug', args.map(String).join(' '));
-			this.originalDebug.apply(console, args);
-		};
-	}
-
-	private push(level: string, message: string) {
-		this.buffer.push({
-			projectId: PROJECT_ID,
-			level,
-			message,
-			timestamp: new Date().toISOString(),
-		});
-
-		if (this.buffer.length >= BATCH_SIZE) {
-			this.flush();
+			if (this.buffer.length >= BATCH_SIZE) {
+				this.flush();
+			}
+		} catch {
+			// ignore parse errors
 		}
 	}
 
-	private startFlushTimer() {
-		this.timer = setInterval(() => this.flush(), FLUSH_INTERVAL);
+	private mapLevel(level: number): string {
+		if (level <= 20) return 'debug';
+		if (level <= 30) return 'info';
+		if (level <= 40) return 'warn';
+		if (level <= 50) return 'error';
+		return 'fatal';
 	}
 
 	public async flush() {
 		if (this.buffer.length === 0) return;
-
 		const payload = [...this.buffer];
 		this.buffer = [];
 
@@ -72,32 +51,82 @@ class RemoteLogger {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(payload),
 			});
-		} catch (error_) {
-			// Silent fail but log to original error console to avoid swallowing or infinite recursion
-			this.originalError.call(console, '[RemoteLogger] Failed to flush logs:', error_);
+		} catch {
+			// silent fail
 		}
 	}
 
-	public info(msg: string, ...meta: any[]) {
-		console.log(msg, ...meta);
-	}
-
-	public error(msg: string, ...meta: any[]) {
-		console.error(msg, ...meta);
-	}
-
-	public warn(msg: string, ...meta: any[]) {
-		console.warn(msg, ...meta);
-	}
-
-	public debug(msg: string, ...meta: any[]) {
-		console.debug(msg, ...meta);
-	}
-
-	public async close() {
-		if (this.timer) clearInterval(this.timer);
-		await this.flush();
+	public stop() {
+		clearInterval(this.timer);
 	}
 }
 
-export const globalLogger = new RemoteLogger();
+const remoteStream = new RemoteStream();
+
+export const globalLogger = pino(
+	{
+		level: 'info',
+		timestamp: pino.stdTimeFunctions.isoTime,
+	},
+	pino.multistream([
+		{
+			stream: pino.transport({
+				target: 'pino-pretty',
+				options: {
+					colorize: true,
+					ignore: 'pid,hostname,projectId',
+					include: 'level,time,msg',
+				},
+			}),
+		},
+		{ stream: remoteStream },
+	]),
+);
+
+// Intercept console calls to pipe them through pino
+// We use a more robust version that doesn't just stringify everything
+console.log = (...args: any[]) => {
+	const msg = args.find((a) => typeof a === 'string') || '';
+	const objs = args.filter((a) => typeof a !== 'string');
+	if (objs.length > 0) {
+		globalLogger.info(Object.assign({}, ...objs), msg);
+	} else {
+		globalLogger.info(msg);
+	}
+};
+
+console.error = (...args: any[]) => {
+	const msg = args.find((a) => typeof a === 'string') || '';
+	const objs = args.filter((a) => typeof a !== 'string');
+	if (objs.length > 0) {
+		globalLogger.error(Object.assign({}, ...objs), msg);
+	} else {
+		globalLogger.error(msg);
+	}
+};
+
+console.warn = (...args: any[]) => {
+	const msg = args.find((a) => typeof a === 'string') || '';
+	const objs = args.filter((a) => typeof a !== 'string');
+	if (objs.length > 0) {
+		globalLogger.warn(Object.assign({}, ...objs), msg);
+	} else {
+		globalLogger.warn(msg);
+	}
+};
+
+console.debug = (...args: any[]) => {
+	const msg = args.find((a) => typeof a === 'string') || '';
+	const objs = args.filter((a) => typeof a !== 'string');
+	if (objs.length > 0) {
+		globalLogger.debug(Object.assign({}, ...objs), msg);
+	} else {
+		globalLogger.debug(msg);
+	}
+};
+
+// Add close method for graceful shutdown
+(globalLogger as any).close = async () => {
+	remoteStream.stop();
+	await remoteStream.flush();
+};

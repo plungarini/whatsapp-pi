@@ -45,8 +45,7 @@ async function connectToWhatsApp() {
 
 		if (connection === 'close') {
 			const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
-			globalLogger.error('Connection closed due to', lastDisconnect?.error, ', reconnecting:', shouldReconnect);
-
+			globalLogger.error(`Connection closed due to ${lastDisconnect?.error}, reconnecting: ${shouldReconnect}`);
 			if (shouldReconnect) {
 				setTimeout(() => connectToWhatsApp(), 5000);
 			}
