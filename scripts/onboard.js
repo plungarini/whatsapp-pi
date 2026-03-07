@@ -204,18 +204,20 @@ async function main() {
 				output: process.stdout,
 			});
 			const question2 = (query) => new Promise((resolve) => rl2.question(query, resolve));
-			const installVec = await question2('\nDo you want to install sqlite-vec for AI semantic search? (y/N): ');
+			console.log('\n--- AI Semantic Search setup ---');
+			console.log('Semantic search requires sqlite-vec. It seems to be missing or not loaded.');
+			const installVec = await question2('Do you want to run the setup:vec command to fix this? (y/N): ');
 			rl2.close();
 
 			const { execSync } = await import('node:child_process');
 
 			if (installVec.toLowerCase().trim() === 'y') {
-				console.log('\nInstalling sqlite-vec...');
+				console.log('\nInstalling sqlite-vec extension (this may take a minute)...');
 				try {
 					execSync('npm run setup:vec', { stdio: 'inherit' });
-					console.log('✅ Successfully installed sqlite-vec!');
+					console.log('✅ Setup command finished. Please restart if tests still fail.');
 				} catch (e) {
-					console.error('Failed to install sqlite-vec:', e);
+					console.error('Failed to install sqlite-vec:', e.message);
 				}
 			}
 		}
