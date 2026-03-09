@@ -15,7 +15,7 @@ export async function initServer() {
 
 	// Register Routes
 	app.addHook('preHandler', async (request, reply) => {
-		const apiKey = process.env.API_KEY || 'bf8699858ab55fac8358d21371ddd048';
+		const apiKey = process.env.API_KEY;
 		const providedKey = request.headers['x-api-key'];
 
 		if (providedKey !== apiKey) {
